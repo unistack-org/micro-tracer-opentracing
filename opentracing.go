@@ -1,10 +1,10 @@
-// Package opentracing provides wrappers for OpenTracing
 package opentracing
 
 import (
 	"context"
 
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/log"
 	"go.unistack.org/micro/v3/metadata"
 	"go.unistack.org/micro/v3/tracer"
 )
@@ -12,7 +12,8 @@ import (
 var _ tracer.Tracer = &opentracingTracer{}
 
 type opentracingTracer struct {
-	opts tracer.Options
+	opts   tracer.Options
+	tracer opentracing.Tracer
 }
 
 func (ot *opentracingTracer) Name() string {
@@ -20,11 +21,49 @@ func (ot *opentracingTracer) Name() string {
 }
 
 func (ot *opentracingTracer) Init(opts ...tracer.Option) error {
+	ot.opts = tracer.NewOptions(opts...)
 	return nil
 }
 
 func (ot *opentracingTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOption) (context.Context, tracer.Span) {
-	return nil, nil
+	ctx, span, _ := StartSpanFromIncomingContext(ctx, ot.tracer, name)
+	return ctx, &opentracingSpan{span: span}
+}
+
+type opentracingSpan struct {
+	span   opentracing.Span
+	labels []interface{}
+}
+
+func (os *opentracingSpan) Tracer() tracer.Tracer {
+	return &opentracingTracer{tracer: os.span.Tracer()}
+}
+
+func (os *opentracingSpan) Finish(opts ...tracer.SpanOption) {
+	if len(os.labels) > 0 {
+		os.span.LogKV(os.labels...)
+	}
+	os.span.Finish()
+}
+
+func (os *opentracingSpan) AddEvent(name string, opts ...tracer.EventOption) {
+	os.span.LogFields(log.Event(name))
+}
+
+func (os *opentracingSpan) Context() context.Context {
+	return tracer.NewSpanContext(context.Background(), os)
+}
+
+func (os *opentracingSpan) SetName(name string) {
+	os.span = os.span.SetOperationName(name)
+}
+
+func (os *opentracingSpan) SetLabels(labels ...interface{}) {
+	os.labels = labels
+}
+
+func (os *opentracingSpan) AddLabels(labels ...interface{}) {
+	os.labels = append(os.labels, labels...)
 }
 
 func NewTracer(opts ...tracer.Option) *opentracingTracer {
