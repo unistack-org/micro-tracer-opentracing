@@ -2,6 +2,7 @@ package opentracing
 
 import (
 	"context"
+	"errors"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
@@ -21,12 +22,21 @@ func (ot *opentracingTracer) Name() string {
 }
 
 func (ot *opentracingTracer) Init(opts ...tracer.Option) error {
-	ot.opts = tracer.NewOptions(opts...)
+	for _, o := range opts {
+		o(&ot.opts)
+	}
+
+	if tr, ok := ot.opts.Context.Value(tracerKey{}).(opentracing.Tracer); ok {
+		ot.tracer = tr
+	} else {
+		return errors.New("Tracer option missing")
+	}
+
 	return nil
 }
 
 func (ot *opentracingTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOption) (context.Context, tracer.Span) {
-	ctx, span, _ := StartSpanFromIncomingContext(ctx, ot.tracer, name)
+	ctx, span, _ := startSpanFromIncomingContext(ctx, ot.tracer, name)
 	return ctx, &opentracingSpan{span: span}
 }
 
@@ -75,9 +85,9 @@ func spanFromContext(ctx context.Context) opentracing.Span {
 	return opentracing.SpanFromContext(ctx)
 }
 
-// StartSpanFromOutgoingContext returns a new span with the given operation name and options. If a span
+// startSpanFromOutgoingContext returns a new span with the given operation name and options. If a span
 // is found in the context, it will be used as the parent of the resulting span.
-func StartSpanFromOutgoingContext(ctx context.Context, tracer opentracing.Tracer, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span, error) {
+func startSpanFromOutgoingContext(ctx context.Context, tracer opentracing.Tracer, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span, error) {
 	var parentCtx opentracing.SpanContext
 
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -106,9 +116,9 @@ func StartSpanFromOutgoingContext(ctx context.Context, tracer opentracing.Tracer
 	return ctx, sp, nil
 }
 
-// StartSpanFromIncomingContext returns a new span with the given operation name and options. If a span
+// startSpanFromIncomingContext returns a new span with the given operation name and options. If a span
 // is found in the context, it will be used as the parent of the resulting span.
-func StartSpanFromIncomingContext(ctx context.Context, tracer opentracing.Tracer, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span, error) {
+func startSpanFromIncomingContext(ctx context.Context, tracer opentracing.Tracer, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span, error) {
 	var parentCtx opentracing.SpanContext
 
 	// Find parent span.

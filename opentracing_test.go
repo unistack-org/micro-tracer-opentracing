@@ -26,7 +26,7 @@ func TestStartSpanFromIncomingContext(t *testing.T) {
 	for i := 0; i < 8000; i++ {
 		go func() {
 			defer g.Done()
-			_, sp, err := StartSpanFromIncomingContext(ctx, tracer, "test")
+			_, sp, err := startSpanFromIncomingContext(ctx, tracer, "test")
 			if err != nil {
 				cherr <- err
 			}
