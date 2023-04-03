@@ -6,6 +6,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/stretchr/testify v1.5.1 // indirect
-	go.unistack.org/micro/v3 v3.10.18
+	go.unistack.org/micro/v3 v3.10.19
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
