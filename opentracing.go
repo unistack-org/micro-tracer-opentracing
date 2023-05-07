@@ -6,8 +6,8 @@ import (
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
-	"go.unistack.org/micro/v3/metadata"
-	"go.unistack.org/micro/v3/tracer"
+	"go.unistack.org/micro/v4/metadata"
+	"go.unistack.org/micro/v4/tracer"
 )
 
 var _ tracer.Tracer = &otTracer{}
