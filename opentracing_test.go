@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	opentracing "github.com/opentracing/opentracing-go"
-	"go.unistack.org/micro/v3/metadata"
+	"go.unistack.org/micro/v4/metadata"
 )
 
 func TestStartSpanFromIncomingContext(t *testing.T) {
