@@ -20,16 +20,14 @@ func TestStartSpanFromIncomingContext(t *testing.T) {
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	tracer := opentracing.GlobalTracer()
+	ot := &otTracer{tracer: tracer}
 
 	g.Add(8000)
 	cherr := make(chan error)
 	for i := 0; i < 8000; i++ {
 		go func() {
 			defer g.Done()
-			_, sp, err := StartSpanFromIncomingContext(ctx, tracer, "test")
-			if err != nil {
-				cherr <- err
-			}
+			_, sp := ot.startSpanFromIncomingContext(ctx, tracer, "test")
 			sp.Finish()
 		}()
 	}
