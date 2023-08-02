@@ -7,6 +7,7 @@ import (
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/log"
 	"go.unistack.org/micro/v4/metadata"
+	"go.unistack.org/micro/v4/options"
 	"go.unistack.org/micro/v4/tracer"
 )
 
@@ -21,7 +22,11 @@ func (ot *otTracer) Name() string {
 	return ot.opts.Name
 }
 
-func (ot *otTracer) Init(opts ...tracer.Option) error {
+func (ot *otTracer) Flush(ctx context.Context) error {
+	return nil
+}
+
+func (ot *otTracer) Init(opts ...options.Option) error {
 	for _, o := range opts {
 		o(&ot.opts)
 	}
@@ -35,7 +40,7 @@ func (ot *otTracer) Init(opts ...tracer.Option) error {
 	return nil
 }
 
-func (ot *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOption) (context.Context, tracer.Span) {
+func (ot *otTracer) Start(ctx context.Context, name string, opts ...options.Option) (context.Context, tracer.Span) {
 	options := tracer.NewSpanOptions(opts...)
 	var span opentracing.Span
 	switch options.Kind {
@@ -73,14 +78,14 @@ func (os *otSpan) Tracer() tracer.Tracer {
 	return &otTracer{tracer: os.span.Tracer()}
 }
 
-func (os *otSpan) Finish(opts ...tracer.SpanOption) {
+func (os *otSpan) Finish(opts ...options.Option) {
 	if len(os.opts.Labels) > 0 {
 		os.span.LogKV(os.opts.Labels...)
 	}
 	os.span.Finish()
 }
 
-func (os *otSpan) AddEvent(name string, opts ...tracer.EventOption) {
+func (os *otSpan) AddEvent(name string, opts ...options.Option) {
 	os.span.LogFields(log.Event(name))
 }
 
@@ -104,7 +109,7 @@ func (os *otSpan) AddLabels(labels ...interface{}) {
 	os.opts.Labels = append(os.opts.Labels, labels...)
 }
 
-func NewTracer(opts ...tracer.Option) *otTracer {
+func NewTracer(opts ...options.Option) *otTracer {
 	options := tracer.NewOptions(opts...)
 	return &otTracer{opts: options}
 }
