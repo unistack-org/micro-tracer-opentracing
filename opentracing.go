@@ -21,6 +21,10 @@ func (ot *otTracer) Name() string {
 	return ot.opts.Name
 }
 
+func (ot *otTracer) Flush(ctx context.Context) error {
+	return nil
+}
+
 func (ot *otTracer) Init(opts ...tracer.Option) error {
 	for _, o := range opts {
 		o(&ot.opts)
