@@ -8,6 +8,6 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/stretchr/testify v1.8.3 h1:RP3t2pwF7cMEbC1dqtB6poj3niw/9gnV4Cjg5oW5gtY=
 github.com/stretchr/testify v1.8.3/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
-go.unistack.org/micro/v4 v4.0.7 h1:2lwtZlHcSwgkahhFbkI4x1lOS79lw8uLHtcEhlFF+AM=
-go.unistack.org/micro/v4 v4.0.7/go.mod h1:bVEYTlPi0EsdgZZt311bIroDg9ict7ky3C87dSCCAGk=
+go.unistack.org/micro/v4 v4.0.10 h1:uKqED/n/zrJd4NGxm9OOUw26UMibgYFhf89MOTnM1go=
+go.unistack.org/micro/v4 v4.0.10/go.mod h1:QT3gOIE4qGgBiQGm2Pad/62Sl5R53QfrgYHD448aX14=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
