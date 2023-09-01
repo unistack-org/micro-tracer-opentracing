@@ -3,9 +3,10 @@ package opentracing
 import (
 	"context"
 	"errors"
+	"fmt"
 
-	"github.com/opentracing/opentracing-go"
-	"github.com/opentracing/opentracing-go/log"
+	ot "github.com/opentracing/opentracing-go"
+	otlog "github.com/opentracing/opentracing-go/log"
 	"go.unistack.org/micro/v4/metadata"
 	"go.unistack.org/micro/v4/options"
 	"go.unistack.org/micro/v4/tracer"
@@ -15,24 +16,24 @@ var _ tracer.Tracer = &otTracer{}
 
 type otTracer struct {
 	opts   tracer.Options
-	tracer opentracing.Tracer
+	tracer ot.Tracer
 }
 
-func (ot *otTracer) Name() string {
-	return ot.opts.Name
+func (t *otTracer) Name() string {
+	return t.opts.Name
 }
 
-func (ot *otTracer) Flush(ctx context.Context) error {
+func (t *otTracer) Flush(ctx context.Context) error {
 	return nil
 }
 
-func (ot *otTracer) Init(opts ...options.Option) error {
+func (t *otTracer) Init(opts ...options.Option) error {
 	for _, o := range opts {
-		o(&ot.opts)
+		o(&t.opts)
 	}
 
-	if tr, ok := ot.opts.Context.Value(tracerKey{}).(opentracing.Tracer); ok {
-		ot.tracer = tr
+	if tr, ok := t.opts.Context.Value(tracerKey{}).(ot.Tracer); ok {
+		t.tracer = tr
 	} else {
 		return errors.New("Tracer option missing")
 	}
@@ -40,32 +41,31 @@ func (ot *otTracer) Init(opts ...options.Option) error {
 	return nil
 }
 
-func (ot *otTracer) Start(ctx context.Context, name string, opts ...options.Option) (context.Context, tracer.Span) {
+func (t *otTracer) Start(ctx context.Context, name string, opts ...options.Option) (context.Context, tracer.Span) {
 	options := tracer.NewSpanOptions(opts...)
-	var span opentracing.Span
+	var span ot.Span
 	switch options.Kind {
-	case tracer.SpanKindInternal, tracer.SpanKindUnspecified:
-		ctx, span = ot.startSpanFromContext(ctx, name)
+	case tracer.SpanKindUnspecified:
+		ctx, span = t.startSpanFromAny(ctx, name)
+	case tracer.SpanKindInternal:
+		ctx, span = t.startSpanFromContext(ctx, name)
 	case tracer.SpanKindClient, tracer.SpanKindProducer:
-		ctx, span = ot.startSpanFromOutgoingContext(ctx, name)
+		ctx, span = t.startSpanFromOutgoingContext(ctx, name)
 	case tracer.SpanKindServer, tracer.SpanKindConsumer:
-		ctx, span = ot.startSpanFromIncomingContext(ctx, ot.tracer, name)
+		ctx, span = t.startSpanFromIncomingContext(ctx, name)
 	}
-	return ctx, &otSpan{span: span, opts: options}
+	sp := &otSpan{span: span, opts: options}
+	return tracer.NewSpanContext(ctx, sp), sp
 }
 
 type otSpan struct {
-	span      opentracing.Span
+	span      ot.Span
 	opts      tracer.SpanOptions
 	status    tracer.SpanStatus
 	statusMsg string
 }
 
 func (os *otSpan) SetStatus(st tracer.SpanStatus, msg string) {
-	switch st {
-	case tracer.SpanStatusError:
-		os.span.SetTag("error", true)
-	}
 	os.status = st
 	os.statusMsg = msg
 }
@@ -79,18 +79,37 @@ func (os *otSpan) Tracer() tracer.Tracer {
 }
 
 func (os *otSpan) Finish(opts ...options.Option) {
-	if len(os.opts.Labels) > 0 {
-		os.span.LogKV(os.opts.Labels...)
+	if len(os.opts.Labels)%2 != 0 {
+		os.opts.Labels = os.opts.Labels[:len(os.opts.Labels)-1]
+	}
+	for idx := 0; idx < len(os.opts.Labels); idx += 2 {
+		switch os.opts.Labels[idx] {
+		case "err":
+			os.status = tracer.SpanStatusError
+			os.statusMsg = fmt.Sprintf("%v", os.opts.Labels[idx+1])
+		case "error":
+			continue
+		case "X-Request-Id", "x-request-id":
+			os.span.SetTag("x-request-id", os.opts.Labels[idx+1])
+		case "rpc.call", "rpc.call_type", "rpc.flavor", "span.kind", "sdk.database", "db.statement", "db.args", "args", "db.query", "query", "method":
+			os.span.SetTag(fmt.Sprintf("%v", os.opts.Labels[idx]), fmt.Sprintf("%v", os.opts.Labels[idx+1]))
+		default:
+			os.span.LogKV(os.opts.Labels[idx], os.opts.Labels[idx+1])
+		}
+	}
+	if os.status == tracer.SpanStatusError {
+		os.span.SetTag("error", true)
+		os.span.LogKV("error", os.statusMsg)
 	}
 	os.span.Finish()
 }
 
 func (os *otSpan) AddEvent(name string, opts ...options.Option) {
-	os.span.LogFields(log.Event(name))
+	os.span.LogFields(otlog.Event(name))
 }
 
 func (os *otSpan) Context() context.Context {
-	return opentracing.ContextWithSpan(context.Background(), os.span)
+	return ot.ContextWithSpan(context.Background(), os.span)
 }
 
 func (os *otSpan) SetName(name string) {
@@ -114,75 +133,141 @@ func NewTracer(opts ...options.Option) *otTracer {
 	return &otTracer{opts: options}
 }
 
-func spanFromContext(ctx context.Context) opentracing.Span {
-	return opentracing.SpanFromContext(ctx)
+func spanFromContext(ctx context.Context) ot.Span {
+	return ot.SpanFromContext(ctx)
 }
 
-func (ot *otTracer) startSpanFromContext(ctx context.Context, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span) {
-	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
-		opts = append(opts, opentracing.ChildOf(parentSpan.Context()))
+func (t *otTracer) startSpanFromAny(ctx context.Context, name string, opts ...ot.StartSpanOption) (context.Context, ot.Span) {
+	if tracerSpan, ok := tracer.SpanFromContext(ctx); ok && tracerSpan != nil {
+		return t.startSpanFromContext(ctx, name, opts...)
+	}
+
+	if otSpan := ot.SpanFromContext(ctx); otSpan != nil {
+		return t.startSpanFromContext(ctx, name, opts...)
+	}
+
+	if md, ok := metadata.FromIncomingContext(ctx); ok && md != nil {
+		return t.startSpanFromIncomingContext(ctx, name, opts...)
+	}
+
+	if md, ok := metadata.FromOutgoingContext(ctx); ok && md != nil {
+		return t.startSpanFromOutgoingContext(ctx, name, opts...)
+	}
+
+	return t.startSpanFromContext(ctx, name, opts...)
+}
+
+func (t *otTracer) startSpanFromContext(ctx context.Context, name string, opts ...ot.StartSpanOption) (context.Context, ot.Span) {
+	var parentSpan ot.Span
+	if tracerSpan, ok := tracer.SpanFromContext(ctx); ok && tracerSpan != nil {
+		if sp, ok := tracerSpan.(*otSpan); ok {
+			parentSpan = sp.span
+		}
+	}
+	if parentSpan == nil {
+		if otSpan := ot.SpanFromContext(ctx); otSpan != nil {
+			parentSpan = otSpan
+		}
+	}
+
+	if parentSpan != nil {
+		opts = append(opts, ot.ChildOf(parentSpan.Context()))
 	}
 
 	md := metadata.New(1)
 
-	sp := ot.tracer.StartSpan(name, opts...)
-	if err := sp.Tracer().Inject(sp.Context(), opentracing.TextMap, opentracing.TextMapCarrier(md)); err != nil {
+	sp := t.tracer.StartSpan(name, opts...)
+	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(md)); err != nil {
 		return nil, nil
 	}
 
-	ctx = opentracing.ContextWithSpan(ctx, sp)
+	ctx = ot.ContextWithSpan(ctx, sp)
 
 	return ctx, sp
 }
 
-func (ot *otTracer) startSpanFromOutgoingContext(ctx context.Context, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span) {
-	var parentCtx opentracing.SpanContext
+func (t *otTracer) startSpanFromOutgoingContext(ctx context.Context, name string, opts ...ot.StartSpanOption) (context.Context, ot.Span) {
+	var parentSpan ot.Span
+	if tracerSpan, ok := tracer.SpanFromContext(ctx); ok && tracerSpan != nil {
+		if sp, ok := tracerSpan.(*otSpan); ok {
+			parentSpan = sp.span
+		}
+	}
+	if parentSpan == nil {
+		if otSpan := ot.SpanFromContext(ctx); otSpan != nil {
+			parentSpan = otSpan
+		}
+	}
 
 	md, ok := metadata.FromOutgoingContext(ctx)
-	if ok && md != nil {
-		if spanCtx, err := ot.tracer.Extract(opentracing.TextMap, opentracing.TextMapCarrier(md)); err == nil && ok {
-			parentCtx = spanCtx
-		}
-	}
 
-	if parentCtx != nil {
-		opts = append(opts, opentracing.ChildOf(parentCtx))
+	if parentSpan != nil {
+		opts = append(opts, ot.ChildOf(parentSpan.Context()))
+	} else {
+		var parentCtx ot.SpanContext
+
+		if ok && md != nil {
+			if spanCtx, err := t.tracer.Extract(ot.TextMap, ot.TextMapCarrier(md)); err == nil && ok {
+				parentCtx = spanCtx
+			}
+		}
+
+		if parentCtx != nil {
+			opts = append(opts, ot.ChildOf(parentCtx))
+		}
 	}
 
 	nmd := metadata.Copy(md)
 
-	sp := ot.tracer.StartSpan(name, opts...)
-	if err := sp.Tracer().Inject(sp.Context(), opentracing.TextMap, opentracing.TextMapCarrier(nmd)); err != nil {
+	sp := t.tracer.StartSpan(name, opts...)
+	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(nmd)); err != nil {
 		return nil, nil
 	}
 
-	ctx = metadata.NewOutgoingContext(opentracing.ContextWithSpan(ctx, sp), nmd)
+	ctx = metadata.NewOutgoingContext(ot.ContextWithSpan(ctx, sp), nmd)
 
 	return ctx, sp
 }
 
-func (ot *otTracer) startSpanFromIncomingContext(ctx context.Context, tracer opentracing.Tracer, name string, opts ...opentracing.StartSpanOption) (context.Context, opentracing.Span) {
-	var parentCtx opentracing.SpanContext
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok && md != nil {
-		if spanCtx, err := tracer.Extract(opentracing.TextMap, opentracing.TextMapCarrier(md)); err == nil {
-			parentCtx = spanCtx
+func (t *otTracer) startSpanFromIncomingContext(ctx context.Context, name string, opts ...ot.StartSpanOption) (context.Context, ot.Span) {
+	var parentSpan ot.Span
+	if tracerSpan, ok := tracer.SpanFromContext(ctx); ok && tracerSpan != nil {
+		if sp, ok := tracerSpan.(*otSpan); ok {
+			parentSpan = sp.span
+		}
+	}
+	if parentSpan == nil {
+		if otSpan := ot.SpanFromContext(ctx); otSpan != nil {
+			parentSpan = otSpan
 		}
 	}
 
-	if parentCtx != nil {
-		opts = append(opts, opentracing.ChildOf(parentCtx))
+	md, ok := metadata.FromIncomingContext(ctx)
+
+	if parentSpan != nil {
+		opts = append(opts, ot.ChildOf(parentSpan.Context()))
+	} else {
+		var parentCtx ot.SpanContext
+
+		if ok && md != nil {
+			if spanCtx, err := t.tracer.Extract(ot.TextMap, ot.TextMapCarrier(md)); err == nil {
+				parentCtx = spanCtx
+			}
+		}
+
+		if parentCtx != nil {
+			opts = append(opts, ot.ChildOf(parentCtx))
+		}
 	}
 
 	nmd := metadata.Copy(md)
 
-	sp := tracer.StartSpan(name, opts...)
-	if err := sp.Tracer().Inject(sp.Context(), opentracing.TextMap, opentracing.TextMapCarrier(nmd)); err != nil {
+	sp := t.tracer.StartSpan(name, opts...)
+	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(nmd)); err != nil {
 		return nil, nil
 	}
 
-	ctx = metadata.NewIncomingContext(opentracing.ContextWithSpan(ctx, sp), nmd)
+	ctx = metadata.NewIncomingContext(ot.ContextWithSpan(ctx, sp), nmd)
 
 	return ctx, sp
 }
