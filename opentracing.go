@@ -81,6 +81,7 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 	if len(os.opts.Labels)%2 != 0 {
 		os.opts.Labels = os.opts.Labels[:len(os.opts.Labels)-1]
 	}
+	os.opts.Labels = tracer.UniqLabels(os.opts.Labels)
 	for idx := 0; idx < len(os.opts.Labels); idx += 2 {
 		switch os.opts.Labels[idx] {
 		case "err":
@@ -90,8 +91,10 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 			continue
 		case "X-Request-Id", "x-request-id":
 			os.span.SetTag("x-request-id", os.opts.Labels[idx+1])
-		case "rpc.call", "rpc.call_type", "rpc.flavor", "span.kind", "sdk.database", "db.statement", "db.args", "args", "db.query", "query", "method":
-			os.span.SetTag(fmt.Sprintf("%v", os.opts.Labels[idx]), fmt.Sprintf("%v", os.opts.Labels[idx+1]))
+		case "rpc.call", "rpc.call_type", "rpc.flavor", "rpc.service", "rpc.method",
+			"sdk.database", "db.statement", "db.args", "db.query", "db.method",
+			"messaging.destination.name", "messaging.source.name":
+			os.span.SetTag(fmt.Sprintf("%v", os.opts.Labels[idx]), os.opts.Labels[idx+1])
 		default:
 			os.span.LogKV(os.opts.Labels[idx], os.opts.Labels[idx+1])
 		}
@@ -100,6 +103,7 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 		os.span.SetTag("error", true)
 		os.span.LogKV("error", os.statusMsg)
 	}
+	os.span.SetTag("span.kind", os.opts.Kind)
 	os.span.Finish()
 }
 
