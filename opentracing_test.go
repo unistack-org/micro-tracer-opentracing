@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 	"go.unistack.org/micro/v3/metadata"
 )
 
@@ -20,14 +20,16 @@ func TestStartSpanFromIncomingContext(t *testing.T) {
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	tracer := opentracing.GlobalTracer()
-	ot := &otTracer{tracer: tracer}
 
 	g.Add(8000)
 	cherr := make(chan error)
 	for i := 0; i < 8000; i++ {
 		go func() {
 			defer g.Done()
-			_, sp := ot.startSpanFromIncomingContext(ctx, tracer, "test")
+			_, sp, err := startSpanFromIncomingContext(ctx, tracer, "test")
+			if err != nil {
+				cherr <- err
+			}
 			sp.Finish()
 		}()
 	}

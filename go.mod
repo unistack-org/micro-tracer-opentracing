@@ -1,11 +1,10 @@
 module go.unistack.org/micro-tracer-opentracing/v3
 
-go 1.16
+go 1.20
 
 require (
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.0
-	github.com/stretchr/testify v1.5.1 // indirect
-	go.unistack.org/micro/v3 v3.10.24
-	gopkg.in/yaml.v2 v2.4.0 // indirect
+	go.unistack.org/micro/v3 v3.10.25
 )
+
+require github.com/stretchr/testify v1.8.1 // indirect
