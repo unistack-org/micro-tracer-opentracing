@@ -93,7 +93,7 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 			os.span.SetTag("x-request-id", os.opts.Labels[idx+1])
 		case "rpc.call", "rpc.call_type", "rpc.flavor", "rpc.service", "rpc.method",
 			"sdk.database", "db.statement", "db.args", "db.query", "db.method",
-			"messaging.destination.name", "messaging.source.name":
+			"messaging.destination.name", "messaging.source.name", "messaging.operation":
 			os.span.SetTag(fmt.Sprintf("%v", os.opts.Labels[idx]), os.opts.Labels[idx+1])
 		default:
 			os.span.LogKV(os.opts.Labels[idx], os.opts.Labels[idx+1])
