@@ -111,6 +111,10 @@ func (os *otSpan) AddEvent(name string, opts ...tracer.EventOption) {
 	os.span.LogFields(otlog.Event(name))
 }
 
+func (os *otSpan) AddLogs(kv ...interface{}) {
+	os.span.LogKV(kv...)
+}
+
 func (os *otSpan) Context() context.Context {
 	return ot.ContextWithSpan(context.Background(), os.span)
 }
