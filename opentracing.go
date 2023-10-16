@@ -65,6 +65,25 @@ type otSpan struct {
 	statusMsg string
 }
 
+type spanContext interface {
+	TraceID() fmt.Stringer
+	SpanID() fmt.Stringer
+}
+
+func (os *otSpan) TraceID() string {
+	if spanctx, ok := os.span.Context().(spanContext); ok {
+		return spanctx.TraceID().String()
+	}
+	return ""
+}
+
+func (os *otSpan) SpanID() string {
+	if spanctx, ok := os.span.Context().(spanContext); ok {
+		return spanctx.SpanID().String()
+	}
+	return ""
+}
+
 func (os *otSpan) SetStatus(st tracer.SpanStatus, msg string) {
 	os.status = st
 	os.statusMsg = msg
@@ -76,6 +95,10 @@ func (os *otSpan) Status() (tracer.SpanStatus, string) {
 
 func (os *otSpan) Tracer() tracer.Tracer {
 	return &otTracer{tracer: os.span.Tracer()}
+}
+
+func (os *otSpan) AddLogs(kv ...interface{}) {
+	os.span.LogKV(kv...)
 }
 
 func (os *otSpan) Finish(opts ...options.Option) {
