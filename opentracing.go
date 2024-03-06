@@ -10,6 +10,7 @@ import (
 	"go.unistack.org/micro/v4/metadata"
 	"go.unistack.org/micro/v4/options"
 	"go.unistack.org/micro/v4/tracer"
+	rutil "go.unistack.org/micro/v4/util/reflect"
 )
 
 var _ tracer.Tracer = &otTracer{}
@@ -29,7 +30,9 @@ func (t *otTracer) Flush(ctx context.Context) error {
 
 func (t *otTracer) Init(opts ...options.Option) error {
 	for _, o := range opts {
-		o(&t.opts)
+		if err := o(&t.opts); err != nil {
+			return err
+		}
 	}
 
 	if tr, ok := t.opts.Context.Value(tracerKey{}).(ot.Tracer); ok {
@@ -39,6 +42,11 @@ func (t *otTracer) Init(opts ...options.Option) error {
 	}
 
 	return nil
+}
+
+type spanContext interface {
+	TraceID() idStringer
+	SpanID() idStringer
 }
 
 func (t *otTracer) Start(ctx context.Context, name string, opts ...options.Option) (context.Context, tracer.Span) {
@@ -54,34 +62,48 @@ func (t *otTracer) Start(ctx context.Context, name string, opts ...options.Optio
 	case tracer.SpanKindServer, tracer.SpanKindConsumer:
 		ctx, span = t.startSpanFromIncomingContext(ctx, name)
 	}
+
 	sp := &otSpan{span: span, opts: options}
+
+	spctx := span.Context()
+	if v, ok := spctx.(spanContext); ok {
+		sp.traceID = v.TraceID().String()
+		sp.spanID = v.SpanID().String()
+	} else {
+		if val, err := rutil.StructFieldByName(spctx, "TraceID"); err == nil {
+			sp.traceID = fmt.Sprintf("%v", val)
+		}
+		if val, err := rutil.StructFieldByName(spctx, "SpanID"); err == nil {
+			sp.spanID = fmt.Sprintf("%v", val)
+		}
+	}
+
 	return tracer.NewSpanContext(ctx, sp), sp
+}
+
+type idStringer struct {
+	s string
+}
+
+func (s idStringer) String() string {
+	return s.s
 }
 
 type otSpan struct {
 	span      ot.Span
+	spanID    string
+	traceID   string
 	opts      tracer.SpanOptions
 	status    tracer.SpanStatus
 	statusMsg string
 }
 
-type spanContext interface {
-	TraceID() fmt.Stringer
-	SpanID() fmt.Stringer
-}
-
 func (os *otSpan) TraceID() string {
-	if spanctx, ok := os.span.Context().(spanContext); ok {
-		return spanctx.TraceID().String()
-	}
-	return ""
+	return os.traceID
 }
 
 func (os *otSpan) SpanID() string {
-	if spanctx, ok := os.span.Context().(spanContext); ok {
-		return spanctx.SpanID().String()
-	}
-	return ""
+	return os.spanID
 }
 
 func (os *otSpan) SetStatus(st tracer.SpanStatus, msg string) {
@@ -158,10 +180,6 @@ func (os *otSpan) AddLabels(labels ...interface{}) {
 func NewTracer(opts ...options.Option) *otTracer {
 	options := tracer.NewOptions(opts...)
 	return &otTracer{opts: options}
-}
-
-func spanFromContext(ctx context.Context) ot.Span {
-	return ot.SpanFromContext(ctx)
 }
 
 func (t *otTracer) startSpanFromAny(ctx context.Context, name string, opts ...ot.StartSpanOption) (context.Context, ot.Span) {
