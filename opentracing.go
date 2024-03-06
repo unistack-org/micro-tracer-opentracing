@@ -9,6 +9,7 @@ import (
 	otlog "github.com/opentracing/opentracing-go/log"
 	"go.unistack.org/micro/v3/metadata"
 	"go.unistack.org/micro/v3/tracer"
+	rutil "go.unistack.org/micro/v3/util/reflect"
 )
 
 var _ tracer.Tracer = &otTracer{}
@@ -40,6 +41,11 @@ func (t *otTracer) Init(opts ...tracer.Option) error {
 	return nil
 }
 
+type spanContext interface {
+	TraceID() idStringer
+	SpanID() idStringer
+}
+
 func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOption) (context.Context, tracer.Span) {
 	options := tracer.NewSpanOptions(opts...)
 	var span ot.Span
@@ -53,15 +59,48 @@ func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOp
 	case tracer.SpanKindServer, tracer.SpanKindConsumer:
 		ctx, span = t.startSpanFromIncomingContext(ctx, name)
 	}
+
 	sp := &otSpan{span: span, opts: options}
+
+	spctx := span.Context()
+	if v, ok := spctx.(spanContext); ok {
+		sp.traceID = v.TraceID().String()
+		sp.spanID = v.SpanID().String()
+	} else {
+		if val, err := rutil.StructFieldByName(spctx, "TraceID"); err == nil {
+			sp.traceID = fmt.Sprintf("%v", val)
+		}
+		if val, err := rutil.StructFieldByName(spctx, "SpanID"); err == nil {
+			sp.spanID = fmt.Sprintf("%v", val)
+		}
+	}
+
 	return tracer.NewSpanContext(ctx, sp), sp
+}
+
+type idStringer struct {
+	s string
+}
+
+func (s idStringer) String() string {
+	return s.s
 }
 
 type otSpan struct {
 	span      ot.Span
+	spanID    string
+	traceID   string
 	opts      tracer.SpanOptions
 	status    tracer.SpanStatus
 	statusMsg string
+}
+
+func (os *otSpan) TraceID() string {
+	return os.traceID
+}
+
+func (os *otSpan) SpanID() string {
+	return os.spanID
 }
 
 func (os *otSpan) SetStatus(st tracer.SpanStatus, msg string) {
@@ -138,10 +177,6 @@ func (os *otSpan) AddLabels(labels ...interface{}) {
 func NewTracer(opts ...tracer.Option) *otTracer {
 	options := tracer.NewOptions(opts...)
 	return &otTracer{opts: options}
-}
-
-func spanFromContext(ctx context.Context) ot.Span {
-	return ot.SpanFromContext(ctx)
 }
 
 func (t *otTracer) startSpanFromAny(ctx context.Context, name string, opts ...ot.StartSpanOption) (context.Context, ot.Span) {

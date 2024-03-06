@@ -2,49 +2,31 @@ package opentracing
 
 import (
 	"context"
-	"sync"
 	"testing"
 
-	"github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/mocktracer"
 	"go.unistack.org/micro/v3/metadata"
+	"go.unistack.org/micro/v3/tracer"
 )
 
-func TestStartSpanFromIncomingContext(t *testing.T) {
-	md := metadata.New(2)
-	md.Set("key", "val")
-
-	var g sync.WaitGroup
-
+func TestTraceID(t *testing.T) {
+	md := metadata.New(1)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ctx = metadata.NewIncomingContext(ctx, md)
 
-	tracer := opentracing.GlobalTracer()
-
-	g.Add(8000)
-	cherr := make(chan error)
-	for i := 0; i < 8000; i++ {
-		go func() {
-			defer g.Done()
-			_, sp, err := startSpanFromIncomingContext(ctx, tracer, "test")
-			if err != nil {
-				cherr <- err
-			}
-			sp.Finish()
-		}()
+	tr := NewTracer(Tracer(mocktracer.New()))
+	if err := tr.Init(); err != nil {
+		t.Fatal(err)
 	}
 
-	for {
-		select {
-		default:
-			g.Wait()
-			close(cherr)
-		case err, ok := <-cherr:
-			if err != nil {
-				t.Fatal(err)
-			} else if !ok {
-				return
-			}
-		}
+	var sp tracer.Span
+
+	ctx, sp = tr.Start(ctx, "test")
+	if v := sp.TraceID(); v != "43" {
+		t.Fatalf("invalid span trace id %#+v", v)
+	}
+	if v := sp.SpanID(); v != "44" {
+		t.Fatalf("invalid span span id %#+v", v)
 	}
 }
