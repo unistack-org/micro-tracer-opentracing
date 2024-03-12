@@ -129,20 +129,28 @@ func (os *otSpan) Finish(opts ...options.Option) {
 	}
 	os.opts.Labels = tracer.UniqLabels(os.opts.Labels)
 	for idx := 0; idx < len(os.opts.Labels); idx += 2 {
-		switch os.opts.Labels[idx] {
+		k, ok := os.opts.Labels[idx].(string)
+		if !ok {
+			continue
+		}
+		v, ok := os.opts.Labels[idx+1].(string)
+		if !ok {
+			v = fmt.Sprintf("%v", os.opts.Labels[idx+1])
+		}
+		switch k {
 		case "err":
 			os.status = tracer.SpanStatusError
-			os.statusMsg = fmt.Sprintf("%v", os.opts.Labels[idx+1])
+			os.statusMsg = v
 		case "error":
 			continue
 		case "X-Request-Id", "x-request-id":
-			os.span.SetTag("x-request-id", os.opts.Labels[idx+1])
+			os.span.SetTag("x-request-id", v)
 		case "rpc.call", "rpc.call_type", "rpc.flavor", "rpc.service", "rpc.method",
 			"sdk.database", "db.statement", "db.args", "db.query", "db.method",
 			"messaging.destination.name", "messaging.source.name", "messaging.operation":
-			os.span.SetTag(fmt.Sprintf("%v", os.opts.Labels[idx]), os.opts.Labels[idx+1])
+			os.span.SetTag(k, v)
 		default:
-			os.span.LogKV(os.opts.Labels[idx], os.opts.Labels[idx+1])
+			os.span.LogKV(k, v)
 		}
 	}
 	if os.status == tracer.SpanStatusError {
