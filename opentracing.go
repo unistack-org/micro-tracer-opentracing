@@ -126,25 +126,8 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 		if !ok {
 			continue
 		}
-		v, ok := os.opts.Labels[idx+1].(string)
-		if !ok {
-			v = fmt.Sprintf("%v", os.opts.Labels[idx+1])
-		}
-		switch k {
-		case "err":
-			os.status = tracer.SpanStatusError
-			os.statusMsg = v
-		case "error":
-			continue
-		case "X-Request-Id", "x-request-id":
-			os.span.SetTag("x-request-id", v)
-		case "rpc.call", "rpc.call_type", "rpc.flavor", "rpc.service", "rpc.method",
-			"sdk.database", "db.statement", "db.args", "db.query", "db.method",
-			"messaging.destination.name", "messaging.source.name", "messaging.operation":
-			os.span.SetTag(k, v)
-		default:
-			os.span.LogKV(k, v)
-		}
+		v := os.opts.Labels[idx+1]
+		os.span.SetTag(k, v)
 	}
 	if os.status == tracer.SpanStatusError {
 		os.span.SetTag("error", true)
@@ -179,7 +162,17 @@ func (os *otSpan) Kind() tracer.SpanKind {
 }
 
 func (os *otSpan) AddLabels(labels ...interface{}) {
-	os.opts.Labels = append(os.opts.Labels, labels...)
+	if len(labels)%2 != 0 {
+		labels = labels[:len(labels)-1]
+	}
+	for idx := 0; idx < len(labels); idx += 2 {
+		k, kok := labels[idx].(string)
+		if !kok {
+			continue
+		}
+		v := labels[idx+1]
+		os.span.SetTag(k, v)
+	}
 }
 
 func NewTracer(opts ...tracer.Option) *otTracer {
