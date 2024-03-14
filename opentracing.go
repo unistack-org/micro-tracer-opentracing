@@ -7,6 +7,7 @@ import (
 
 	ot "github.com/opentracing/opentracing-go"
 	otlog "github.com/opentracing/opentracing-go/log"
+	"go.opentelemetry.io/otel/attribute"
 	"go.unistack.org/micro/v3/metadata"
 	"go.unistack.org/micro/v3/tracer"
 	rutil "go.unistack.org/micro/v3/util/reflect"
@@ -162,16 +163,17 @@ func (os *otSpan) Kind() tracer.SpanKind {
 }
 
 func (os *otSpan) AddLabels(labels ...interface{}) {
-	if len(labels)%2 != 0 {
-		labels = labels[:len(labels)-1]
-	}
-	for idx := 0; idx < len(labels); idx += 2 {
-		k, kok := labels[idx].(string)
-		if !kok {
-			continue
+	l := len(labels)
+	for idx := 0; idx < len(labels); idx++ {
+		switch lt := labels[idx].(type) {
+		case attribute.KeyValue:
+			os.span.SetTag(string(lt.Key), lt.Value.AsInterface())
+		case string:
+			if l < idx+1 {
+				os.span.SetTag(lt, labels[idx+1])
+				idx++
+			}
 		}
-		v := labels[idx+1]
-		os.span.SetTag(k, v)
 	}
 }
 
