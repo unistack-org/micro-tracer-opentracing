@@ -118,23 +118,29 @@ func (os *otSpan) Tracer() tracer.Tracer {
 }
 
 func (os *otSpan) Finish(opts ...tracer.SpanOption) {
-	if len(os.opts.Labels)%2 != 0 {
-		os.opts.Labels = os.opts.Labels[:len(os.opts.Labels)-1]
+	options := os.opts
+	for _, o := range opts {
+		o(&options)
 	}
-	os.opts.Labels = tracer.UniqLabels(os.opts.Labels)
-	for idx := 0; idx < len(os.opts.Labels); idx += 2 {
-		k, ok := os.opts.Labels[idx].(string)
-		if !ok {
-			continue
+
+	l := len(options.Labels)
+	for idx := 0; idx < len(options.Labels); idx++ {
+		switch lt := options.Labels[idx].(type) {
+		case attribute.KeyValue:
+			os.span.SetTag(string(lt.Key), lt.Value.AsInterface())
+		case string:
+			if l < idx+1 {
+				os.span.SetTag(lt, options.Labels[idx+1])
+				idx++
+			}
 		}
-		v := os.opts.Labels[idx+1]
-		os.span.SetTag(k, v)
 	}
+
 	if os.status == tracer.SpanStatusError {
 		os.span.SetTag("error", true)
 		os.span.LogKV("error", os.statusMsg)
 	}
-	os.span.SetTag("span.kind", os.opts.Kind)
+	os.span.SetTag("span.kind", options.Kind)
 	os.span.Finish()
 }
 
