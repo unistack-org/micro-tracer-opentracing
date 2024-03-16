@@ -76,6 +76,8 @@ func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOp
 		}
 	}
 
+	sp.AddLabels(options.Labels)
+
 	return tracer.NewSpanContext(ctx, sp), sp
 }
 
