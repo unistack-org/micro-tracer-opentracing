@@ -30,3 +30,24 @@ func TestTraceID(t *testing.T) {
 		t.Fatalf("invalid span span id %#+v", v)
 	}
 }
+
+func TestTraceTags(t *testing.T) {
+	md := metadata.New(1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx = metadata.NewIncomingContext(ctx, md)
+
+	mtr := mocktracer.New()
+	tr := NewTracer(Tracer(mtr))
+	if err := tr.Init(); err != nil {
+		t.Fatal(err)
+	}
+
+	var sp tracer.Span
+
+	ctx, sp = tr.Start(ctx, "test", tracer.WithSpanLabels("key", "val", "odd"))
+	sp.Finish()
+
+	msp := mtr.FinishedSpans()[0]
+	t.Logf("mock span %#+v", msp.Tags())
+}

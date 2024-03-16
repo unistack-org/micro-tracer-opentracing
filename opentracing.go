@@ -126,12 +126,12 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 	}
 
 	l := len(options.Labels)
-	for idx := 0; idx < len(options.Labels); idx++ {
+	for idx := 0; idx < l; idx++ {
 		switch lt := options.Labels[idx].(type) {
 		case attribute.KeyValue:
 			os.span.SetTag(string(lt.Key), lt.Value.AsInterface())
 		case string:
-			if l < idx+1 {
+			if l > idx+1 {
 				os.span.SetTag(lt, options.Labels[idx+1])
 				idx++
 			}
@@ -172,12 +172,13 @@ func (os *otSpan) Kind() tracer.SpanKind {
 
 func (os *otSpan) AddLabels(labels ...interface{}) {
 	l := len(labels)
-	for idx := 0; idx < len(labels); idx++ {
+
+	for idx := 0; idx < l; idx++ {
 		switch lt := labels[idx].(type) {
 		case attribute.KeyValue:
 			os.span.SetTag(string(lt.Key), lt.Value.AsInterface())
 		case string:
-			if l < idx+1 {
+			if l > idx+1 {
 				os.span.SetTag(lt, labels[idx+1])
 				idx++
 			}
