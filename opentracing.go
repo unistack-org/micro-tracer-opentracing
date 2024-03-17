@@ -76,8 +76,6 @@ func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOp
 		}
 	}
 
-	sp.AddLabels(options.Labels...)
-
 	return tracer.NewSpanContext(ctx, sp), sp
 }
 
@@ -96,6 +94,7 @@ type otSpan struct {
 	opts      tracer.SpanOptions
 	status    tracer.SpanStatus
 	statusMsg string
+	labels    []interface{}
 }
 
 func (os *otSpan) TraceID() string {
@@ -171,19 +170,7 @@ func (os *otSpan) Kind() tracer.SpanKind {
 }
 
 func (os *otSpan) AddLabels(labels ...interface{}) {
-	l := len(labels)
-
-	for idx := 0; idx < l; idx++ {
-		switch lt := labels[idx].(type) {
-		case attribute.KeyValue:
-			os.span.SetTag(string(lt.Key), lt.Value.AsInterface())
-		case string:
-			if l > idx+1 {
-				os.span.SetTag(lt, labels[idx+1])
-				idx++
-			}
-		}
-	}
+	os.labels = append(os.labels, labels...)
 }
 
 func NewTracer(opts ...tracer.Option) *otTracer {
