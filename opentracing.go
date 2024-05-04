@@ -124,6 +124,10 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 		o(&options)
 	}
 
+	if !options.Record {
+		return
+	}
+
 	l := len(options.Labels)
 	for idx := 0; idx < l; idx++ {
 		switch lt := options.Labels[idx].(type) {
