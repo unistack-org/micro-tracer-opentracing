@@ -128,14 +128,15 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 		return
 	}
 
-	l := len(options.Labels)
+	labels := append(options.Labels, os.labels...)
+	l := len(labels)
 	for idx := 0; idx < l; idx++ {
-		switch lt := options.Labels[idx].(type) {
+		switch lt := labels[idx].(type) {
 		case attribute.KeyValue:
 			os.span.SetTag(string(lt.Key), lt.Value.AsInterface())
 		case string:
 			if l > idx+1 {
-				os.span.SetTag(lt, options.Labels[idx+1])
+				os.span.SetTag(lt, labels[idx+1])
 				idx++
 			}
 		}
