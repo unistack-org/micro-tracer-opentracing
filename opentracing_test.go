@@ -2,6 +2,7 @@ package opentracing
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/opentracing/opentracing-go/mocktracer"
@@ -46,8 +47,15 @@ func TestTraceTags(t *testing.T) {
 	var sp tracer.Span
 
 	ctx, sp = tr.Start(ctx, "test", tracer.WithSpanLabels("key", "val", "odd"))
-	sp.Finish()
-
+	sp.Finish(tracer.WithSpanLabels("xkey", "xval"))
+	_ = ctx
 	msp := mtr.FinishedSpans()[0]
-	t.Logf("mock span %#+v", msp.Tags())
+
+	if "val" != fmt.Sprintf("%v", msp.Tags()["key"]) {
+		t.Fatal("mock span invalid")
+	}
+
+	if "xval" != fmt.Sprintf("%v", msp.Tags()["xkey"]) {
+		t.Fatalf("mock span invalid %#+v", msp)
+	}
 }

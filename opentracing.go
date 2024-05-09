@@ -49,6 +49,9 @@ type spanContext interface {
 
 func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOption) (context.Context, tracer.Span) {
 	options := tracer.NewSpanOptions(opts...)
+	if len(options.Labels)%2 != 0 {
+		options.Labels = options.Labels[:len(options.Labels)-1]
+	}
 	var span ot.Span
 	switch options.Kind {
 	case tracer.SpanKindUnspecified:
@@ -95,6 +98,7 @@ type otSpan struct {
 	status    tracer.SpanStatus
 	statusMsg string
 	labels    []interface{}
+	finished  bool
 }
 
 func (os *otSpan) TraceID() string {
@@ -119,7 +123,16 @@ func (os *otSpan) Tracer() tracer.Tracer {
 }
 
 func (os *otSpan) Finish(opts ...tracer.SpanOption) {
+	if os.finished {
+		return
+	}
+
 	options := os.opts
+
+	options.Status = os.status
+	options.StatusMsg = os.statusMsg
+	options.Labels = append(options.Labels, os.labels...)
+
 	for _, o := range opts {
 		o(&options)
 	}
@@ -128,26 +141,32 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 		return
 	}
 
-	labels := append(options.Labels, os.labels...)
-	l := len(labels)
+	if len(options.Labels)%2 != 0 {
+		options.Labels = options.Labels[:len(options.Labels)-1]
+	}
+
+	l := len(options.Labels)
 	for idx := 0; idx < l; idx++ {
-		switch lt := labels[idx].(type) {
+		switch lt := options.Labels[idx].(type) {
 		case attribute.KeyValue:
 			os.span.SetTag(string(lt.Key), lt.Value.AsInterface())
 		case string:
 			if l > idx+1 {
-				os.span.SetTag(lt, labels[idx+1])
+				os.span.SetTag(lt, options.Labels[idx+1])
 				idx++
 			}
 		}
 	}
 
-	if os.status == tracer.SpanStatusError {
+	if options.Status == tracer.SpanStatusError {
 		os.span.SetTag("error", true)
-		os.span.LogKV("error", os.statusMsg)
+		os.span.LogKV("error", options.StatusMsg)
 	}
+
 	os.span.SetTag("span.kind", options.Kind)
 	os.span.Finish()
+
+	os.finished = true
 }
 
 func (os *otSpan) AddEvent(name string, opts ...tracer.EventOption) {
