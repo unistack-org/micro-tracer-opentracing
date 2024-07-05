@@ -49,9 +49,15 @@ type spanContext interface {
 
 func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOption) (context.Context, tracer.Span) {
 	options := tracer.NewSpanOptions(opts...)
+
 	if len(options.Labels)%2 != 0 {
 		options.Labels = options.Labels[:len(options.Labels)-1]
 	}
+
+	for _, fn := range t.opts.ContextAttrFuncs {
+		options.Labels = append(options.Labels, fn(ctx)...)
+	}
+
 	var span ot.Span
 	switch options.Kind {
 	case tracer.SpanKindUnspecified:
