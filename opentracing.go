@@ -3,14 +3,13 @@ package opentracing
 import (
 	"context"
 	"errors"
-	"fmt"
+	"strings"
 
 	ot "github.com/opentracing/opentracing-go"
 	otlog "github.com/opentracing/opentracing-go/log"
 	"go.opentelemetry.io/otel/attribute"
 	"go.unistack.org/micro/v3/metadata"
 	"go.unistack.org/micro/v3/tracer"
-	rutil "go.unistack.org/micro/v3/util/reflect"
 )
 
 var _ tracer.Tracer = &otTracer{}
@@ -42,7 +41,12 @@ func (t *otTracer) Init(opts ...tracer.Option) error {
 	return nil
 }
 
-type spanContext interface {
+type otSpanContext interface {
+	TraceID() idStringer
+	SpanID() idStringer
+}
+
+type jSpanContext interface {
 	TraceID() idStringer
 	SpanID() idStringer
 }
@@ -73,17 +77,34 @@ func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOp
 	sp := &otSpan{span: span, opts: options}
 
 	spctx := span.Context()
-	if v, ok := spctx.(spanContext); ok {
-		sp.traceID = v.TraceID().String()
-		sp.spanID = v.SpanID().String()
+
+	var traceID, spanID, parentID string
+
+	if v, ok := spctx.(otSpanContext); ok {
+		traceID = v.TraceID().String()
+		spanID = v.SpanID().String()
 	} else {
-		if val, err := rutil.StructFieldByName(spctx, "TraceID"); err == nil {
-			sp.traceID = fmt.Sprintf("%v", val)
-		}
-		if val, err := rutil.StructFieldByName(spctx, "SpanID"); err == nil {
-			sp.spanID = fmt.Sprintf("%v", val)
+		carrier := make(map[string]string, 1)
+		_ = span.Tracer().Inject(spctx, ot.TextMap, ot.TextMapCarrier(carrier))
+		for k, v := range carrier {
+			switch k {
+			default: // reasonable default
+				p := strings.Split(v, ":")
+				traceID = p[0]
+				spanID = p[1]
+				parentID = p[2]
+			case "uber-trace-id": // jaeger trace span
+				p := strings.Split(v, ":")
+				traceID = p[0]
+				spanID = p[1]
+				parentID = p[2]
+			}
 		}
 	}
+
+	sp.traceID = traceID
+	sp.spanID = spanID
+	sp.parentID = parentID
 
 	return tracer.NewSpanContext(ctx, sp), sp
 }
@@ -100,6 +121,7 @@ type otSpan struct {
 	span      ot.Span
 	spanID    string
 	traceID   string
+	parentID  string
 	opts      tracer.SpanOptions
 	status    tracer.SpanStatus
 	statusMsg string
