@@ -137,6 +137,10 @@ func (os *otSpan) SpanID() string {
 	return os.spanID
 }
 
+func (os *otSpan) ParentID() string {
+	return os.parentID
+}
+
 func (os *otSpan) SetStatus(st tracer.SpanStatus, msg string) {
 	os.status = st
 	os.statusMsg = msg
