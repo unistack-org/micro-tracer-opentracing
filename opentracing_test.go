@@ -86,7 +86,7 @@ func TestRealTraceID(t *testing.T) {
 	}
 	l.Info(ctx, "msg")
 }
-*
+*/
 
 func TestTraceTags(t *testing.T) {
 	md := metadata.New(1)

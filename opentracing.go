@@ -88,6 +88,12 @@ func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOp
 		_ = span.Tracer().Inject(spctx, ot.TextMap, ot.TextMapCarrier(carrier))
 		for k, v := range carrier {
 			switch k {
+			case "mockpfx-ids-sampled":
+				continue
+			case "mockpfx-ids-spanid":
+				spanID = v
+			case "mockpfx-ids-traceid":
+				traceID = v
 			default: // reasonable default
 				p := strings.Split(v, ":")
 				traceID = p[0]
