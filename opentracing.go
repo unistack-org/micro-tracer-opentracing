@@ -321,10 +321,14 @@ func (t *otTracer) startSpanFromOutgoingContext(ctx context.Context, name string
 	}
 
 	nmd := metadata.Copy(md)
+	smd := metadata.New(1)
 
 	sp := t.tracer.StartSpan(name, opts...)
-	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(nmd)); err != nil {
+	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(smd)); err != nil {
 		return nil, nil
+	}
+	for k, v := range smd {
+		nmd.Set(k, v)
 	}
 
 	ctx = metadata.NewOutgoingContext(ot.ContextWithSpan(ctx, sp), nmd)
@@ -364,10 +368,14 @@ func (t *otTracer) startSpanFromIncomingContext(ctx context.Context, name string
 	}
 
 	nmd := metadata.Copy(md)
+	smd := metadata.New(1)
 
 	sp := t.tracer.StartSpan(name, opts...)
-	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(nmd)); err != nil {
+	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(smd)); err != nil {
 		return nil, nil
+	}
+	for k, v := range smd {
+		nmd.Set(k, v)
 	}
 
 	ctx = metadata.NewIncomingContext(ot.ContextWithSpan(ctx, sp), nmd)
