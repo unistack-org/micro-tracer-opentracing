@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.unistack.org/micro/v3/metadata"
 	"go.unistack.org/micro/v3/tracer"
+	"go.unistack.org/micro/v3/util/sort"
 )
 
 var _ tracer.Tracer = &otTracer{}
@@ -182,6 +183,8 @@ func (os *otSpan) Finish(opts ...tracer.SpanOption) {
 	if len(options.Labels)%2 != 0 {
 		options.Labels = options.Labels[:len(options.Labels)-1]
 	}
+
+	os.opts.Labels = sort.Uniq(os.opts.Labels)
 
 	l := len(options.Labels)
 	for idx := 0; idx < l; idx++ {
