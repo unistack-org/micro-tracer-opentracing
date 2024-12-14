@@ -29,4 +29,5 @@ func TestTraceID(t *testing.T) {
 	if v := sp.SpanID(); v != "44" {
 		t.Fatalf("invalid span span id %#+v", v)
 	}
+	_ = ctx
 }
