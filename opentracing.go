@@ -47,11 +47,6 @@ type otSpanContext interface {
 	SpanID() idStringer
 }
 
-type jSpanContext interface {
-	TraceID() idStringer
-	SpanID() idStringer
-}
-
 func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOption) (context.Context, tracer.Span) {
 	options := tracer.NewSpanOptions(opts...)
 
