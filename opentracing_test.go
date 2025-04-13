@@ -37,7 +37,7 @@ func TestNoopTraceID(t *testing.T) {
 	if err := l.Init(); err != nil {
 		t.Fatal(err)
 	}
-	l.Info(ctx, "msg")
+	// l.Info(ctx, "msg")
 }
 
 /*

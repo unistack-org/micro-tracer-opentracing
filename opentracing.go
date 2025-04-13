@@ -143,6 +143,10 @@ func (os *otSpan) ParentID() string {
 	return os.parentID
 }
 
+func (os *otSpan) IsRecording() bool {
+	return true
+}
+
 func (os *otSpan) SetStatus(st tracer.SpanStatus, msg string) {
 	os.status = st
 	os.statusMsg = msg
