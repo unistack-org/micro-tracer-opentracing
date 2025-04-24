@@ -3,14 +3,13 @@ package opentracing
 import (
 	"context"
 	"errors"
-	"fmt"
+	"strings"
 
 	ot "github.com/opentracing/opentracing-go"
 	otlog "github.com/opentracing/opentracing-go/log"
+	"go.opentelemetry.io/otel/attribute"
 	"go.unistack.org/micro/v4/metadata"
-	"go.unistack.org/micro/v4/options"
 	"go.unistack.org/micro/v4/tracer"
-	rutil "go.unistack.org/micro/v4/util/reflect"
 )
 
 var _ tracer.Tracer = &otTracer{}
@@ -28,11 +27,9 @@ func (t *otTracer) Flush(ctx context.Context) error {
 	return nil
 }
 
-func (t *otTracer) Init(opts ...options.Option) error {
+func (t *otTracer) Init(opts ...tracer.Option) error {
 	for _, o := range opts {
-		if err := o(&t.opts); err != nil {
-			return err
-		}
+		o(&t.opts)
 	}
 
 	if tr, ok := t.opts.Context.Value(tracerKey{}).(ot.Tracer); ok {
@@ -44,13 +41,22 @@ func (t *otTracer) Init(opts ...options.Option) error {
 	return nil
 }
 
-type spanContext interface {
+type otSpanContext interface {
 	TraceID() idStringer
 	SpanID() idStringer
 }
 
-func (t *otTracer) Start(ctx context.Context, name string, opts ...options.Option) (context.Context, tracer.Span) {
+func (t *otTracer) Start(ctx context.Context, name string, opts ...tracer.SpanOption) (context.Context, tracer.Span) {
 	options := tracer.NewSpanOptions(opts...)
+
+	if len(options.Labels)%2 != 0 {
+		options.Labels = options.Labels[:len(options.Labels)-1]
+	}
+
+	for _, fn := range t.opts.ContextAttrFuncs {
+		options.Labels = append(options.Labels, fn(ctx)...)
+	}
+
 	var span ot.Span
 	switch options.Kind {
 	case tracer.SpanKindUnspecified:
@@ -66,17 +72,40 @@ func (t *otTracer) Start(ctx context.Context, name string, opts ...options.Optio
 	sp := &otSpan{span: span, opts: options}
 
 	spctx := span.Context()
-	if v, ok := spctx.(spanContext); ok {
-		sp.traceID = v.TraceID().String()
-		sp.spanID = v.SpanID().String()
+
+	var traceID, spanID, parentID string
+
+	if v, ok := spctx.(otSpanContext); ok {
+		traceID = v.TraceID().String()
+		spanID = v.SpanID().String()
 	} else {
-		if val, err := rutil.StructFieldByName(spctx, "TraceID"); err == nil {
-			sp.traceID = fmt.Sprintf("%v", val)
-		}
-		if val, err := rutil.StructFieldByName(spctx, "SpanID"); err == nil {
-			sp.spanID = fmt.Sprintf("%v", val)
+		carrier := make(map[string]string, 1)
+		_ = span.Tracer().Inject(spctx, ot.TextMap, ot.TextMapCarrier(carrier))
+		for k, v := range carrier {
+			switch k {
+			case "mockpfx-ids-sampled":
+				continue
+			case "mockpfx-ids-spanid":
+				spanID = v
+			case "mockpfx-ids-traceid":
+				traceID = v
+			default: // reasonable default
+				p := strings.Split(v, ":")
+				traceID = p[0]
+				spanID = p[1]
+				parentID = p[2]
+			case "uber-trace-id": // jaeger trace span
+				p := strings.Split(v, ":")
+				traceID = p[0]
+				spanID = p[1]
+				parentID = p[2]
+			}
 		}
 	}
+
+	sp.traceID = traceID
+	sp.spanID = spanID
+	sp.parentID = parentID
 
 	return tracer.NewSpanContext(ctx, sp), sp
 }
@@ -93,9 +122,12 @@ type otSpan struct {
 	span      ot.Span
 	spanID    string
 	traceID   string
+	parentID  string
 	opts      tracer.SpanOptions
 	status    tracer.SpanStatus
 	statusMsg string
+	labels    []interface{}
+	finished  bool
 }
 
 func (os *otSpan) TraceID() string {
@@ -104,6 +136,14 @@ func (os *otSpan) TraceID() string {
 
 func (os *otSpan) SpanID() string {
 	return os.spanID
+}
+
+func (os *otSpan) ParentID() string {
+	return os.parentID
+}
+
+func (os *otSpan) IsRecording() bool {
+	return true
 }
 
 func (os *otSpan) SetStatus(st tracer.SpanStatus, msg string) {
@@ -119,50 +159,61 @@ func (os *otSpan) Tracer() tracer.Tracer {
 	return &otTracer{tracer: os.span.Tracer()}
 }
 
+func (os *otSpan) Finish(opts ...tracer.SpanOption) {
+	if os.finished {
+		return
+	}
+
+	options := os.opts
+
+	options.Status = os.status
+	options.StatusMsg = os.statusMsg
+	options.Labels = append(options.Labels, os.labels...)
+
+	for _, o := range opts {
+		o(&options)
+	}
+
+	if !options.Record {
+		return
+	}
+
+	if len(options.Labels)%2 != 0 {
+		options.Labels = options.Labels[:len(options.Labels)-1]
+	}
+
+	// options.Labels = sort.Uniq(options.Labels)
+
+	l := len(options.Labels)
+	for idx := 0; idx < l; idx++ {
+		switch lt := options.Labels[idx].(type) {
+		case attribute.KeyValue:
+			os.span.SetTag(string(lt.Key), lt.Value.AsInterface())
+		case string:
+			if l > idx+1 {
+				os.span.SetTag(lt, options.Labels[idx+1])
+				idx++
+			}
+		}
+	}
+
+	if options.Status == tracer.SpanStatusError {
+		os.span.SetTag("error", true)
+		os.span.LogKV("error", options.StatusMsg)
+	}
+
+	os.span.SetTag("span.kind", options.Kind)
+	os.span.Finish()
+
+	os.finished = true
+}
+
+func (os *otSpan) AddEvent(name string, opts ...tracer.EventOption) {
+	os.span.LogFields(otlog.Event(name))
+}
+
 func (os *otSpan) AddLogs(kv ...interface{}) {
 	os.span.LogKV(kv...)
-}
-
-func (os *otSpan) Finish(opts ...options.Option) {
-	if len(os.opts.Labels)%2 != 0 {
-		os.opts.Labels = os.opts.Labels[:len(os.opts.Labels)-1]
-	}
-	os.opts.Labels = tracer.UniqLabels(os.opts.Labels)
-	for idx := 0; idx < len(os.opts.Labels); idx += 2 {
-		k, ok := os.opts.Labels[idx].(string)
-		if !ok {
-			continue
-		}
-		v, ok := os.opts.Labels[idx+1].(string)
-		if !ok {
-			v = fmt.Sprintf("%v", os.opts.Labels[idx+1])
-		}
-		switch k {
-		case "err":
-			os.status = tracer.SpanStatusError
-			os.statusMsg = v
-		case "error":
-			continue
-		case "X-Request-Id", "x-request-id":
-			os.span.SetTag("x-request-id", v)
-		case "rpc.call", "rpc.call_type", "rpc.flavor", "rpc.service", "rpc.method",
-			"sdk.database", "db.statement", "db.args", "db.query", "db.method",
-			"messaging.destination.name", "messaging.source.name", "messaging.operation":
-			os.span.SetTag(k, v)
-		default:
-			os.span.LogKV(k, v)
-		}
-	}
-	if os.status == tracer.SpanStatusError {
-		os.span.SetTag("error", true)
-		os.span.LogKV("error", os.statusMsg)
-	}
-	os.span.SetTag("span.kind", os.opts.Kind)
-	os.span.Finish()
-}
-
-func (os *otSpan) AddEvent(name string, opts ...options.Option) {
-	os.span.LogFields(otlog.Event(name))
 }
 
 func (os *otSpan) Context() context.Context {
@@ -182,10 +233,10 @@ func (os *otSpan) Kind() tracer.SpanKind {
 }
 
 func (os *otSpan) AddLabels(labels ...interface{}) {
-	os.opts.Labels = append(os.opts.Labels, labels...)
+	os.labels = append(os.labels, labels...)
 }
 
-func NewTracer(opts ...options.Option) *otTracer {
+func NewTracer(opts ...tracer.Option) *otTracer {
 	options := tracer.NewOptions(opts...)
 	return &otTracer{opts: options}
 }
@@ -271,10 +322,14 @@ func (t *otTracer) startSpanFromOutgoingContext(ctx context.Context, name string
 	}
 
 	nmd := metadata.Copy(md)
+	smd := metadata.New(1)
 
 	sp := t.tracer.StartSpan(name, opts...)
-	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(nmd)); err != nil {
+	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(smd)); err != nil {
 		return nil, nil
+	}
+	for k, v := range smd {
+		nmd.Set(k, v)
 	}
 
 	ctx = metadata.NewOutgoingContext(ot.ContextWithSpan(ctx, sp), nmd)
@@ -314,10 +369,14 @@ func (t *otTracer) startSpanFromIncomingContext(ctx context.Context, name string
 	}
 
 	nmd := metadata.Copy(md)
+	smd := metadata.New(1)
 
 	sp := t.tracer.StartSpan(name, opts...)
-	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(nmd)); err != nil {
+	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(smd)); err != nil {
 		return nil, nil
+	}
+	for k, v := range smd {
+		nmd.Set(k, v)
 	}
 
 	ctx = metadata.NewIncomingContext(ot.ContextWithSpan(ctx, sp), nmd)
