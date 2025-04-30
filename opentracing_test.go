@@ -25,7 +25,7 @@ func TestNoopTraceID(t *testing.T) {
 
 	var sp tracer.Span
 
-	ctx, sp = tr.Start(ctx, "test")
+	_, sp = tr.Start(ctx, "test")
 	if v := sp.TraceID(); v != "43" {
 		t.Fatalf("invalid span trace id %#+v", v)
 	}
