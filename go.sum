@@ -24,5 +24,7 @@ go.opentelemetry.io/otel v1.35.0 h1:xKWKPxrxB6OtMCbmMY021CqC45J+3Onta9MqjhnusiQ=
 go.opentelemetry.io/otel v1.35.0/go.mod h1:UEqy8Zp11hpkUrL73gSlELM0DupHoiq72dR+Zqel/+Y=
 go.unistack.org/micro/v4 v4.1.6 h1:sYLpe1Vd8/lDwddtV0BLTvJ+i+fllXAS4fZngT1wKZ4=
 go.unistack.org/micro/v4 v4.1.6/go.mod h1:lr3oYED8Ay1vjK68QqRw30QOtdk/ffpZqMFDasOUhKw=
+go.unistack.org/micro/v4 v4.1.14 h1:6EotPq9kz/gaFb5YulHdKuuUwmj/7Hk44DpOlzh/A6k=
+go.unistack.org/micro/v4 v4.1.14/go.mod h1:xleO2M5Yxh4s6I+RUcLrEpUjobefh+71ctrdIfn7TUs=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

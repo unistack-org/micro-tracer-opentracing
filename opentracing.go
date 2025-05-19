@@ -261,6 +261,10 @@ func (t *otTracer) startSpanFromAny(ctx context.Context, name string, opts ...ot
 	return t.startSpanFromContext(ctx, name, opts...)
 }
 
+func (t *otTracer) Enabled() bool {
+	return t.opts.Enabled
+}
+
 func (t *otTracer) startSpanFromContext(ctx context.Context, name string, opts ...ot.StartSpanOption) (context.Context, ot.Span) {
 	var parentSpan ot.Span
 	if tracerSpan, ok := tracer.SpanFromContext(ctx); ok && tracerSpan != nil {
