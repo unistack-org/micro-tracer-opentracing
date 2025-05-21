@@ -261,6 +261,10 @@ func (t *otTracer) startSpanFromAny(ctx context.Context, name string, opts ...ot
 	return t.startSpanFromContext(ctx, name, opts...)
 }
 
+func (t *otTracer) Enabled() bool {
+	return t.opts.Enabled
+}
+
 func (t *otTracer) startSpanFromContext(ctx context.Context, name string, opts ...ot.StartSpanOption) (context.Context, ot.Span) {
 	var parentSpan ot.Span
 	if tracerSpan, ok := tracer.SpanFromContext(ctx); ok && tracerSpan != nil {
@@ -278,7 +282,7 @@ func (t *otTracer) startSpanFromContext(ctx context.Context, name string, opts .
 		opts = append(opts, ot.ChildOf(parentSpan.Context()))
 	}
 
-	md := metadata.New(1)
+	md := make(map[string]string, 1)
 
 	sp := t.tracer.StartSpan(name, opts...)
 	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(md)); err != nil {
@@ -311,7 +315,8 @@ func (t *otTracer) startSpanFromOutgoingContext(ctx context.Context, name string
 		var parentCtx ot.SpanContext
 
 		if ok && md != nil {
-			if spanCtx, err := t.tracer.Extract(ot.TextMap, ot.TextMapCarrier(md)); err == nil && ok {
+			smd := make(map[string]string, 1)
+			if spanCtx, err := t.tracer.Extract(ot.TextMap, ot.TextMapCarrier(smd)); err == nil && ok {
 				parentCtx = spanCtx
 			}
 		}
@@ -322,7 +327,7 @@ func (t *otTracer) startSpanFromOutgoingContext(ctx context.Context, name string
 	}
 
 	nmd := metadata.Copy(md)
-	smd := metadata.New(1)
+	smd := make(map[string]string, 1)
 
 	sp := t.tracer.StartSpan(name, opts...)
 	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(smd)); err != nil {
@@ -358,7 +363,8 @@ func (t *otTracer) startSpanFromIncomingContext(ctx context.Context, name string
 		var parentCtx ot.SpanContext
 
 		if ok && md != nil {
-			if spanCtx, err := t.tracer.Extract(ot.TextMap, ot.TextMapCarrier(md)); err == nil {
+			smd := make(map[string]string, 1)
+			if spanCtx, err := t.tracer.Extract(ot.TextMap, ot.TextMapCarrier(smd)); err == nil {
 				parentCtx = spanCtx
 			}
 		}
@@ -369,7 +375,7 @@ func (t *otTracer) startSpanFromIncomingContext(ctx context.Context, name string
 	}
 
 	nmd := metadata.Copy(md)
-	smd := metadata.New(1)
+	smd := make(map[string]string, 1)
 
 	sp := t.tracer.StartSpan(name, opts...)
 	if err := sp.Tracer().Inject(sp.Context(), ot.TextMap, ot.TextMapCarrier(smd)); err != nil {
