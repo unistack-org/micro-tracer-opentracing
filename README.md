@@ -1,2 +1,2 @@
 # micro-tracer-opentracing
-![Coverage](https://img.shields.io/badge/Coverage-37.0%25-yellow)
+![Coverage](https://img.shields.io/badge/Coverage-36.4%25-yellow)
