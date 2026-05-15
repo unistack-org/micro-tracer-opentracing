@@ -7,9 +7,9 @@ import (
 
 	"github.com/opentracing/opentracing-go/mocktracer"
 	// jconfig "github.com/uber/jaeger-client-go/config"
-	"go.unistack.org/micro/v4/logger/slog"
-	"go.unistack.org/micro/v4/metadata"
-	"go.unistack.org/micro/v4/tracer"
+	"go.unistack.org/micro/v5/logger/slog"
+	"go.unistack.org/micro/v5/metadata"
+	"go.unistack.org/micro/v5/tracer"
 )
 
 func TestNoopTraceID(t *testing.T) {

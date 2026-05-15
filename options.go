@@ -2,7 +2,7 @@ package opentracing
 
 import (
 	"github.com/opentracing/opentracing-go"
-	"go.unistack.org/micro/v4/tracer"
+	"go.unistack.org/micro/v5/tracer"
 )
 
 type tracerKey struct{}

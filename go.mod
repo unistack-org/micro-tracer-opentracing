@@ -1,4 +1,4 @@
-module go.unistack.org/micro-tracer-opentracing/v4
+module go.unistack.org/micro-tracer-opentracing/v5
 
 go 1.22.0
 
@@ -7,7 +7,7 @@ toolchain go1.23.4
 require (
 	github.com/opentracing/opentracing-go v1.2.0
 	go.opentelemetry.io/otel v1.35.0
-	go.unistack.org/micro/v4 v4.1.14
+	go.unistack.org/micro/v5 v4.1.14
 )
 
 require (

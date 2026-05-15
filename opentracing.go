@@ -8,8 +8,8 @@ import (
 	ot "github.com/opentracing/opentracing-go"
 	otlog "github.com/opentracing/opentracing-go/log"
 	"go.opentelemetry.io/otel/attribute"
-	"go.unistack.org/micro/v4/metadata"
-	"go.unistack.org/micro/v4/tracer"
+	"go.unistack.org/micro/v5/metadata"
+	"go.unistack.org/micro/v5/tracer"
 )
 
 var _ tracer.Tracer = &otTracer{}
